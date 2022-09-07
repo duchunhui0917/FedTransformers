@@ -5,53 +5,82 @@ import warnings
 import logging
 import json
 from transformers import HfArgumentParser
+import wandb
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
+from src.utils.plot_utils import plot_hist
 
 base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = 'ploner'
-dataset_path = os.path.join(base_dir, f"data/ploner_data.h5")
-algorithm = 'FedAvg'
-split_type = 'doc_split'
-model_name = 'bert-base-uncased'
-tunning_name = 'P-Tunning_v2'
+task_name = 'mrqa'
+dataset_path = os.path.join(base_dir, f"data/mrqa_data.h5")
+algorithm = 'centralized'
+split_type = 'centralized'
+model_name = 'distilbert-base-uncased'
+model_type = 'distilbert'
+tunning_method = 'frozen'
+prompt_method = None
+seed = 221
+dirichlet_alpha = 10
 model_path = os.path.join(base_dir,
-                          f"ckpt/{algorithm}/ploner/{model_name}_{tunning_name}_5_tgwg")
+                          f"ckpt/{algorithm}/20news_{seed}_100_100_100/{model_name}_{dirichlet_alpha}_10_5_tgwg")
 
 config = [
     f'--task_name={task_name}',
     f'--dataset_path={dataset_path}',
     f'--model_name={model_name}',
+    f'--model_type={model_type}',
     # f'--model_path={model_path}',
-    f'--tunning_name={tunning_name}',
-    '--lr=5e-3',
+    # f'--tunning_method={tunning_method}',
+    # f'--prompt_method={prompt_method}',
+    '--lr=1e-5',
     f'--algorithm={algorithm}',
     f'--split_type={split_type}',
-    '--train_batch_size=8',
-    '--eval_batch_size=8',
-    '--seed=223',
+    '--num_clients=100',
+    '--select_ratio=0.1',
+    '--num_epochs=1',
+    f'--dirichlet_alpha={dirichlet_alpha}',
+    '--train_batch_size=32',
+    '--eval_batch_size=32',
+    '--max_seq_length=256',
+    '--decoder_max_length=32',
+    '--max_train_samples=100',
+    '--max_eval_samples=100',
+    '--max_test_samples=100',
+    f'--seed={seed}',
     '--num_iterations=100',
-    '--num_epochs=5',
     '--do_train=True',
-    '--do_test=True'
+    '--do_test=True',
+    # '--tgwp=True',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_mrqa'
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
+if model_args.prompt_method:
+    model_name += f'_{model_args.prompt_method}'
 
 if fl_args.split_type == 'label_split':
     ckpt = f'{model_name}_{fl_args.dirichlet_alpha}_{fl_args.num_clients}_{fl_args.num_epochs}'
@@ -80,8 +109,7 @@ elif fl_args.algorithm == 'MOON':
 else:
     raise NotImplementedError
 
-if data_args.max_train_samples or data_args.max_train_samples or data_args.max_train_samples:
-    task_name += f'_s{fl_args.seed}'
+task_name += f'_s{fl_args.seed}'
 
 if data_args.max_train_samples:
     task_name += f'_{data_args.max_train_samples}'
@@ -149,3 +177,5 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
+
+wandb.finish()

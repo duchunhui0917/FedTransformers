@@ -15,7 +15,7 @@ GLUE_DATASETS = list(glue_task_to_keys.keys())
 SUPERGLUE_DATASETS = list(superglue_task_to_keys.keys())
 TC_DATASETS = ["conll2003", "conll2004", "ontonotes", "ploner"]
 SRL_DATASETS = ["conll2005", "conll2012"]
-QA_DATASETS = ["squad", "squad_v2"]
+QA_DATASETS = ["squad", "squad_v2", "mrqa"]
 RE_DATASETS = ["AIMed", "PGR", "AIMed*PGR", "BioInfer"]
 SC_DATASETS = [
     "20news", "20news_class6", 'web_of_science', "agnews",
@@ -85,7 +85,7 @@ class DataArguments:
         default=256,
     )
     stride: Optional[int] = field(
-        default=128,
+        default=64,
         metadata={
             "help": "The stride for question answering."
         }
@@ -393,15 +393,15 @@ class FederatedLearningArguments:
 
 @dataclass
 class WandbArguments:
-    enable: Optional[bool] = field(
+    enable_wandb: Optional[bool] = field(
         default=False,
         metadata={}
     )
     team_name: Optional[str] = field(
-        default='',
+        default='duchunhuiteam',
         metadata={}
     )
     project_name: Optional[str] = field(
-        default='',
+        default='FedTransformers',
         metadata={}
     )

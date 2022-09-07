@@ -1,3 +1,5 @@
+import wandb
+
 from FedBioNLP.utils.status_utils import tensor_cos_sim
 from .base import Base
 from src.clients.base import BaseClient
@@ -157,16 +159,19 @@ class FedAvg(Base):
             logger.info('test global test dataset with global model')
             model = copy.deepcopy(self.model)
             metrics, _ = self.eval_model(model, data_loader=self.central_client.eval_loader)
-            if metrics[self.m] > self.tgwg_best_metric:
-                self.tgwg_best_metric = metrics[self.m]
+            tgwg_metric = metrics[self.m]
+            wandb.log({'tgwg': tgwg_metric}, step=self.ite)
+
+            if tgwg_metric > self.tgwg_best_metric:
+                self.tgwg_best_metric = tgwg_metric
                 torch.save(self.model.state_dict(), self.tgwg_ckpt)
                 logger.info('new model saved')
             logger.info(f'best {self.m}: {self.tgwg_best_metric:.4f}')
-            for name, params in model.named_parameters():
-                if name == 'encoder.classifier.weight':
-                    cosine_matrix = cosine_similarity(params.detach().numpy(), params.detach().numpy())
-                    print('classifier cosine similarity')
-                    print(cosine_matrix)
+            # for name, params in model.named_parameters():
+            #     if name == 'encoder.classifier.weight':
+            #         cosine_matrix = cosine_similarity(params.detach().numpy(), params.detach().numpy())
+            #         print('classifier cosine similarity')
+            #         print(cosine_matrix)
 
         for i in select_clients:
             model = copy.deepcopy(self.clients[i].model)

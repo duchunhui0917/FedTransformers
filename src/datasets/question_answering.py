@@ -15,6 +15,27 @@ import collections
 logger = logging.getLogger(os.path.basename(__file__))
 
 
+def update_dict(idxes, doc_index, unique_docs, d, df):
+    t = tqdm(idxes)
+    for idx in t:
+        ids = df['question_ids'][str(idx)][()].decode('UTF-8')
+        d['id'].append(ids)
+
+        context = df['context_X'][str(idx)][()].decode('UTF-8')
+        d['context'].append(context)
+
+        question = df['question_X'][str(idx)][()].decode('UTF-8')
+        d['question'].append(question)
+
+        answer_text = df['Y_answer'][str(idx)][()].decode('UTF-8')
+        answer_start = df['Y'][str(idx)][()][0]
+        d['answers'].append({'text': answer_text, 'answer_start': [answer_start]})
+
+        doc = doc_index[str(idx)]
+        d['doc'].append(doc)
+        unique_docs.add(doc)
+
+
 class QuestionAnsweringDataset:
     def __init__(self, data_args, model_args):
         self.task_name = data_args.task_name
@@ -26,7 +47,7 @@ class QuestionAnsweringDataset:
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name) if self.model_name != 'LSTM' else None
         self.max_seq_length = data_args.max_seq_length
-        self.max_answer_length = data_args.max_target_length
+        self.max_answer_length = data_args.decoder_max_length
 
         self.stride = data_args.stride
         self.n_best = data_args.n_best
@@ -41,7 +62,13 @@ class QuestionAnsweringDataset:
             with h5py.File(self.dataset_path, 'r+') as df:
                 attributes = json.loads(df["attributes"][()])
 
-                self.label_vocab = attributes['label_vocab']
+                doc_dict = {'SQuAD': 0,
+                            'NewsQA': 1,
+                            'TriviaQA': 2,
+                            'SearchQA': 3,
+                            'HotpotQA': 4,
+                            'NaturalQuestionsShort': 5,
+                            }
                 index_list = attributes['index_list']
                 train_idx = attributes['train_index_list']
                 test_idx = attributes['test_index_list']
@@ -49,37 +76,21 @@ class QuestionAnsweringDataset:
 
                 if 'doc_index' in attributes:
                     doc_index = attributes['doc_index']
+                elif 'label_index_list' in attributes:
+                    doc_index = {str(i): doc_dict[x] for i, x in enumerate(attributes['label_index_list'])}
                 else:
                     doc_index = {str(i): 0 for i in index_list}
-                self.num_labels = attributes['num_labels']
 
                 unique_docs = set()
 
-                train_dict, eval_dict, test_dict = ({'text': [], 'label': [], 'doc': []} for _ in range(3))
-                for idx in train_idx:
-                    text = df['X'][str(idx)][()].decode('UTF-8')
-                    train_dict['text'].append(text)
-                    label = df['Y'][str(idx)][()].decode('UTF-8')
-                    train_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    train_dict['doc'].append(doc)
-                    unique_docs.add(doc)
-                for idx in eval_idx:
-                    text = df['X'][str(idx)][()].decode('UTF-8')
-                    eval_dict['text'].append(text)
-                    label = df['Y'][str(idx)][()].decode('UTF-8')
-                    eval_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    eval_dict['doc'].append(doc)
-                    unique_docs.add(doc)
-                for idx in test_idx:
-                    text = df['X'][str(idx)][()].decode('UTF-8')
-                    test_dict['text'].append(text)
-                    label = df['Y'][str(idx)][()].decode('UTF-8')
-                    test_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    test_dict['doc'].append(doc)
-                    unique_docs.add(doc)
+                train_dict, eval_dict, test_dict = (
+                    {'id': [], 'context': [], 'question': [], 'answers': [], 'doc': []} for _ in range(3)
+                )
+                update_dict(train_idx, doc_index, unique_docs, train_dict, df)
+                update_dict(eval_idx, doc_index, unique_docs, eval_dict, df)
+                update_dict(test_idx, doc_index, unique_docs, test_dict, df)
+
+                self.unique_docs = unique_docs
 
             train_dataset = Dataset.from_dict(train_dict)
             eval_dataset = Dataset.from_dict(eval_dict)
@@ -128,10 +139,14 @@ class QuestionAnsweringDataset:
                                              load_from_cache_file=False)
 
     def process_training_fn(self, examples):
-        questions = [q.strip() for q in examples["question"]]
+        question = [q.strip() for q in examples["question"]]
+        context = examples["context"]
+        answers = examples["answers"]
+        doc = examples["doc"]
+
         inputs = self.tokenizer(
-            questions,
-            examples["context"],
+            question,
+            context,
             max_length=self.max_seq_length,
             truncation="only_second",
             stride=self.stride,
@@ -142,13 +157,14 @@ class QuestionAnsweringDataset:
 
         offset_mapping = inputs.pop("offset_mapping")
         sample_map = inputs.pop("overflow_to_sample_mapping")
-        answers = examples["answers"]
         start_positions = []
         end_positions = []
+        docs = []
 
         for i, offset in enumerate(offset_mapping):
             sample_idx = sample_map[i]
             answer = answers[sample_idx]
+            docs.append(doc[sample_idx])
             start_char = answer["answer_start"][0]
             end_char = answer["answer_start"][0] + len(answer["text"][0])
             sequence_ids = inputs.sequence_ids(i)
@@ -180,13 +196,18 @@ class QuestionAnsweringDataset:
 
         inputs["start_positions"] = start_positions
         inputs["end_positions"] = end_positions
+        inputs["doc"] = docs
         return inputs
 
     def preprocess_validation_fn(self, examples):
+        context = examples["context"]
         questions = [q.strip() for q in examples["question"]]
+        ids = examples["id"]
+        doc = examples["doc"]
+
         inputs = self.tokenizer(
             questions,
-            examples["context"],
+            context,
             max_length=self.max_seq_length,
             truncation="only_second",
             stride=self.stride,
@@ -197,11 +218,12 @@ class QuestionAnsweringDataset:
 
         sample_map = inputs.pop("overflow_to_sample_mapping")
         example_ids = []
+        docs = []
 
         for i in range(len(inputs["input_ids"])):
             sample_idx = sample_map[i]
-            example_ids.append(examples["id"][sample_idx])
-
+            example_ids.append(ids[sample_idx])
+            docs.append(doc[sample_idx])
             sequence_ids = inputs.sequence_ids(i)
             offset = inputs["offset_mapping"][i]
             inputs["offset_mapping"][i] = [
@@ -209,6 +231,7 @@ class QuestionAnsweringDataset:
             ]
 
         inputs["example_id"] = example_ids
+        inputs["doc"] = docs
         return inputs
 
     def compute_metrics(self, labels, logits):
@@ -272,6 +295,7 @@ class QuestionAnsweringDataset:
         if len(dataset) == 0:
             return None
         data_collator = DefaultDataCollator()
+        dataset = dataset.remove_columns(['doc'])
         if 'example_id' in dataset.column_names:
             dataset = dataset.remove_columns(['example_id', 'offset_mapping'])
         loader = DataLoader(dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=shuffle)

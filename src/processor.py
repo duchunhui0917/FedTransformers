@@ -241,7 +241,7 @@ def uniform_split(dataset, fl_args):
         num_train = len(cur_train_dataset)
         train_datasets.append(cur_train_dataset)
 
-        eval_idx = train_idxes[i * num_eval_per_client: (i + 1) * num_eval_per_client]
+        eval_idx = eval_idxes[i * num_eval_per_client: (i + 1) * num_eval_per_client]
         cur_eval_dataset = eval_dataset.select(eval_idx)
         num_eval = len(cur_eval_dataset)
         eval_datasets.append(cur_eval_dataset)
@@ -275,13 +275,14 @@ def doc_split(dataset, fl_args):
     eval_datasets = []
     test_datasets = []
 
-    texts = []
+    # texts = []
     for i, cur_doc in enumerate(unique_docs):
         train_idx = [idx for idx, doc in enumerate(train_docs) if doc == cur_doc]
         num_train = len(train_idx)
         cur_train_dataset = train_dataset.select(train_idx)
         train_datasets.append(cur_train_dataset)
-        texts.append(cur_train_dataset['text'])
+
+        # texts.append(cur_train_dataset['text'])
 
         eval_idx = [idx for idx, doc in enumerate(eval_docs) if doc == cur_doc]
         num_eval = len(eval_idx)
@@ -294,7 +295,7 @@ def doc_split(dataset, fl_args):
         test_datasets.append(cur_test_dataset)
 
         logger.info(f'client {i}, number of samples of train/eval/test dataset: {num_train}/{num_eval}/{num_test}')
-    sentence_embedding_tsne(texts)
+    # sentence_embedding_tsne(texts)
     dataset.train_datasets = train_datasets
     dataset.eval_datasets = eval_datasets
     dataset.test_datasets = test_datasets

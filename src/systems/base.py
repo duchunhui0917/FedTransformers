@@ -2,6 +2,7 @@ import copy
 import json
 
 import numpy as np
+import wandb
 from sklearn.metrics.pairwise import cosine_similarity
 from torch.utils.data import DataLoader
 import logging
@@ -71,8 +72,11 @@ class Base(object):
         logger.info('test global test dataset with global model')
         model = copy.deepcopy(self.model)
         metrics, features = self.eval_model(model, data_loader=self.central_client.eval_loader)
-        if metrics[self.m] > self.tgwg_best_metric:
-            self.tgwg_best_metric = metrics[self.m]
+        tgwg_metric = metrics[self.m]
+        wandb.log({'tgwg': tgwg_metric}, step=self.ite)
+
+        if tgwg_metric > self.tgwg_best_metric:
+            self.tgwg_best_metric = tgwg_metric
             torch.save(self.model.state_dict(), self.tgwg_ckpt)
             logger.info('new model saved')
         logger.info(f'best {self.m}: {self.tgwg_best_metric:.4f}')
@@ -130,7 +134,7 @@ class Base(object):
         for key, val in res.items():
             logger.info(f'{key}: {res[key]:.4f}')
         model.cpu()
-        self.compute_feature_sim(res_labels, res_logits, res_features)
+        # self.compute_feature_sim(res_labels, res_logits, res_features)
         return res, res_features
 
     def get_tc_model_gradient_norm(self, model=None, data_loader=None):

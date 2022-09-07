@@ -4,13 +4,15 @@ import datetime
 import warnings
 import logging
 import json
+
+import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -23,30 +25,44 @@ task_name = 'ploner'
 dataset_path = os.path.join(base_dir, f"data/ploner_data.h5")
 algorithm = 'centralized'
 split_type = 'centralized'
-model_name = 'bert-base-uncased'
+model_type = 'distilbert'
+model_name = 'distilbert-base-uncased'
 model_path = os.path.join(base_dir,
                           f"ckpt/{algorithm}/ploner/{model_name}_5_tgwg")
 
 config = [
     f'--task_name={task_name}',
     f'--dataset_path={dataset_path}',
+    f'--model_type={model_type}',
     f'--model_name={model_name}',
     # f'--model_path={model_path}',
-    '--lr=1e-5',
+    '--lr=5e-5',
     f'--algorithm={algorithm}',
     f'--split_type={split_type}',
     '--train_batch_size=8',
     '--eval_batch_size=8',
     # '--max_train_samples=800',
     # '--max_eval_samples=800',
+    # '--max_test_samples=800',
+
     '--seed=223',
     '--num_iterations=100',
     '--do_train=True',
-    '--do_test=True'
+    '--do_test=True',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_ploner',
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
@@ -111,32 +127,6 @@ num_labels = dataset.num_labels
 train_dataset = dataset.train_dataset
 eval_dataset = dataset.eval_dataset
 test_dataset = dataset.test_dataset
-
-if num_labels != 1:
-    if fl_args.algorithm != 'centralized':
-        train_datasets = dataset.train_datasets
-        eval_datasets = dataset.eval_datasets
-        test_datasets = dataset.test_datasets
-
-        mtx, mtx_ = status_mtx(train_datasets, num_labels)
-        plot_class_samples(mtx)
-        mtx = json.dumps(mtx.tolist())
-        logger.info(f'clients train class samples\n{mtx}')
-
-        mtx, mtx_ = status_mtx(eval_datasets, num_labels)
-        plot_class_samples(mtx)
-        mtx = json.dumps(mtx.tolist())
-        logger.info(f'clients eval class samples\n{mtx}')
-
-        mtx, mtx_ = status_mtx(test_datasets, num_labels)
-        plot_class_samples(mtx)
-        mtx = json.dumps(mtx.tolist())
-        logger.info(f'clients test class samples\n{mtx}')
-
-    mtx, mtx_ = status_mtx([train_dataset, eval_dataset, test_dataset], num_labels)
-    plot_class_samples(mtx)
-    mtx = json.dumps(mtx.tolist())
-    logger.info(f'train test class samples\n{mtx}')
 
 s = system(dataset, model, fl_args)
 
