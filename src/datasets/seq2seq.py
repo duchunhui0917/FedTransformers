@@ -25,13 +25,13 @@ class Sequence2SequenceDataset:
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name) if self.model_name != 'LSTM' else None
 
         self.max_seq_length = data_args.max_seq_length
-        self.max_target_length = data_args.max_target_length
+        self.max_target_length = data_args.decoder_max_length
 
         logger.info('loading metric')
         self.eval_metric = 'rouge1'
         self.sacrebleu = load_metric('sacrebleu')
         self.rouge = load_metric('rouge')
-        self.perplexity = load_metric('perplexity')
+        # self.perplexity = load_metric('perplexity')
         self.num_labels = 1
         self.unique_docs = [0]
 
@@ -119,7 +119,7 @@ class Sequence2SequenceDataset:
                 source_lang, target_lang = self.dataset_name.split('-')
                 inputs = [example[source_lang] for example in examples['translation']]
                 targets = [example[target_lang] for example in examples['translation']]
-            if self.task_name == 'cnn_dailymail':
+            elif self.task_name == 'cnn_dailymail':
                 inputs = examples['article']
                 targets = examples['highlights']
             else:
@@ -134,20 +134,29 @@ class Sequence2SequenceDataset:
             return model_inputs
 
     def compute_metrics(self, labels, logits):
+        pad_token_id = self.tokenizer.pad_token_id
         labels, logits = labels[0], logits[0]
         # computing predict labels
-        if len(logits.shape) == 3:
+        if not isinstance(logits, list):
             training = True
             pred_labels = np.argmax(logits, axis=-1)
         else:
             training = False
+            ml = labels.shape[1]
+
             pred_labels = logits
+            for i, x in enumerate(pred_labels):
+                b, l = x.shape[0], x.shape[1]
+                pad = np.ones((b, ml - l), dtype=np.int) * pad_token_id
+                pred_labels[i] = np.concatenate([x, pad], axis=1)
+            pred_labels = np.concatenate(pred_labels)
+
         decoded_pred_labels = self.tokenizer.batch_decode(pred_labels, skip_special_tokens=True)
         decoded_pred_labels = [pred.strip() for pred in decoded_pred_labels]
 
         res = {}
         # computing labels
-        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
+        labels = np.where(labels != -100, labels, pad_token_id)
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
         decoded_labels = [label.strip() for label in decoded_labels]
 
@@ -166,17 +175,17 @@ class Sequence2SequenceDataset:
             "bleu": bleu_results["score"],
         })
         # computing perplexity
-        if not training:
-            idxes = random.sample(range(len(decoded_labels)), k=5)
-            for idx in idxes:
-                print('label:', decoded_labels[idx])
-                print('pred:', decoded_pred_labels[idx])
-
-            decoded_pred_labels = [s.strip() for s in decoded_pred_labels if s != '']
-            perplexity_results = self.perplexity.compute(model_id='gpt2', input_texts=decoded_pred_labels)
-            res.update(
-                {"perplexity": perplexity_results["mean_perplexity"]}
-            )
+        # if not training:
+        #     idxes = random.sample(range(len(decoded_labels)), k=5)
+        #     for idx in idxes:
+        #         print('label:', decoded_labels[idx])
+        #         print('pred:', decoded_pred_labels[idx])
+        #
+        #     decoded_pred_labels = [s.strip() for s in decoded_pred_labels if s != '']
+        #     perplexity_results = self.perplexity.compute(model_id='gpt2', input_texts=decoded_pred_labels)
+        #     res.update(
+        #         {"perplexity": perplexity_results["mean_perplexity"]}
+        #     )
         return res
 
     def get_loader(self, dataset, batch_size, shuffle=False):

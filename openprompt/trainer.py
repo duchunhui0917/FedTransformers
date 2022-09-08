@@ -159,7 +159,7 @@ class BaseRunner(object):
                         )
                         schedulers.append(template_scheduler)
                 elif template_config.optimize.name.lower() == "adafactor":
-                    template_optimizer = Adafactor(optimizer_grouped_parameters, lr=template_config.optimize.lr, weight_decay=1e-5, relative_step=False, scale_parameter=False, warmup_init=False)
+                    template_optimizer = Adafactor(optimizer_grouped_parameters, lr=template_config.optimize.lr, weight_decay=5e-5, relative_step=False, scale_parameter=False, warmup_init=False)
                     # template_scheduler = AdafactorSchedule(template_optimizer)
                     optimizers.append(template_optimizer)
                     # schedulers.append(template_scheduler)

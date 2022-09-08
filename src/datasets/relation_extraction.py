@@ -16,6 +16,23 @@ logger = logging.getLogger(os.path.basename(__file__))
 base_dir = os.path.expanduser('~/FedTransformers')
 
 
+def update_dict(idxes, doc_index, unique_docs, d, df, label_vocab):
+    t = tqdm(idxes)
+    for idx in t:
+        if 'e_text' in df and 'label' in df:
+            text = df['e_text'][str(idx)][()].decode('UTF-8')
+            label = df['label'][str(idx)][()].decode('UTF-8')
+        else:
+            text = df['X'][str(idx)][()].decode('UTF-8')
+            label = df['Y'][str(idx)][()].decode('UTF-8')
+
+        d['text'].append(text)
+        d['label'].append(label_vocab[label])
+        doc = doc_index[str(idx)]
+        d['doc'].append(doc)
+        unique_docs.add(doc)
+
+
 class RelationExtractionDataset:
     def __init__(self, data_args, model_args):
         self.task_name = data_args.task_name
@@ -55,30 +72,11 @@ class RelationExtractionDataset:
                 unique_docs = set()
 
                 train_dict, eval_dict, test_dict = ({'text': [], 'label': [], 'doc': []} for _ in range(3))
-                for idx in train_idx:
-                    text = df['e_text'][str(idx)][()].decode('UTF-8')
-                    train_dict['text'].append(text)
-                    label = df['label'][str(idx)][()].decode('UTF-8')
-                    train_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    train_dict['doc'].append(doc)
-                    unique_docs.add(doc)
-                for idx in eval_idx:
-                    text = df['e_text'][str(idx)][()].decode('UTF-8')
-                    eval_dict['text'].append(text)
-                    label = df['label'][str(idx)][()].decode('UTF-8')
-                    eval_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    eval_dict['doc'].append(doc)
-                    unique_docs.add(doc)
-                for idx in test_idx:
-                    text = df['e_text'][str(idx)][()].decode('UTF-8')
-                    test_dict['text'].append(text)
-                    label = df['label'][str(idx)][()].decode('UTF-8')
-                    test_dict['label'].append(self.label_vocab[label])
-                    doc = doc_index[str(idx)]
-                    test_dict['doc'].append(doc)
-                    unique_docs.add(doc)
+                update_dict(train_idx, doc_index, unique_docs, train_dict, df, self.label_vocab)
+                update_dict(eval_idx, doc_index, unique_docs, eval_dict, df, self.label_vocab)
+                update_dict(test_idx, doc_index, unique_docs, test_dict, df, self.label_vocab)
+
+                self.unique_docs = unique_docs
 
             train_dataset = Dataset.from_dict(train_dict)
             eval_dataset = Dataset.from_dict(eval_dict)

@@ -150,10 +150,14 @@ def feature_split(dataset, fl_args):
     eval_datasets = []
     test_datasets = []
 
+    texts = []
     for i in range(num_clients):
         train_idx = train_idxes[i]
         num_train = len(train_idx)
-        train_datasets.append(train_dataset.select(train_idx))
+        cur_train_dataset = train_dataset.select(train_idx)
+        train_datasets.append(cur_train_dataset)
+        if 'text' in cur_train_dataset.column_names:
+            texts.append(cur_train_dataset['text'])
 
         eval_idx = eval_idxes[i]
         num_eval = len(eval_idx)
@@ -163,7 +167,8 @@ def feature_split(dataset, fl_args):
         num_test = len(test_idx)
         test_datasets.append(test_dataset.select(test_idx))
         logger.info(f'client {i}, number of samples of train/eval/test dataset: {num_train}/{num_eval}/{num_test}')
-
+    if len(texts) != 0:
+        sentence_embedding_tsne(texts)
     dataset.train_datasets = train_datasets
     dataset.eval_datasets = eval_datasets
     dataset.test_datasets = test_datasets
@@ -235,11 +240,14 @@ def uniform_split(dataset, fl_args):
     eval_datasets = []
     test_datasets = []
 
+    texts = []
     for i in range(num_clients):
         train_idx = train_idxes[i * num_train_per_client: (i + 1) * num_train_per_client]
         cur_train_dataset = train_dataset.select(train_idx)
         num_train = len(cur_train_dataset)
         train_datasets.append(cur_train_dataset)
+        if 'text' in cur_train_dataset.column_names:
+            texts.append(cur_train_dataset['text'])
 
         eval_idx = eval_idxes[i * num_eval_per_client: (i + 1) * num_eval_per_client]
         cur_eval_dataset = eval_dataset.select(eval_idx)
@@ -252,6 +260,9 @@ def uniform_split(dataset, fl_args):
         test_datasets.append(cur_test_dataset)
 
         logger.info(f'client {i}, number of samples of train/eval/test dataset: {num_train}/{num_eval}/{num_test}')
+    if len(texts) != 0:
+        sentence_embedding_tsne(texts)
+
     dataset.train_datasets = train_datasets
     dataset.eval_datasets = eval_datasets
     dataset.test_datasets = test_datasets
@@ -275,14 +286,15 @@ def doc_split(dataset, fl_args):
     eval_datasets = []
     test_datasets = []
 
-    # texts = []
+    texts = []
     for i, cur_doc in enumerate(unique_docs):
         train_idx = [idx for idx, doc in enumerate(train_docs) if doc == cur_doc]
         num_train = len(train_idx)
         cur_train_dataset = train_dataset.select(train_idx)
         train_datasets.append(cur_train_dataset)
 
-        # texts.append(cur_train_dataset['text'])
+        if 'text' in cur_train_dataset.column_names:
+            texts.append(cur_train_dataset['text'])
 
         eval_idx = [idx for idx, doc in enumerate(eval_docs) if doc == cur_doc]
         num_eval = len(eval_idx)
@@ -295,7 +307,8 @@ def doc_split(dataset, fl_args):
         test_datasets.append(cur_test_dataset)
 
         logger.info(f'client {i}, number of samples of train/eval/test dataset: {num_train}/{num_eval}/{num_test}')
-    # sentence_embedding_tsne(texts)
+    if len(texts) != 0:
+        sentence_embedding_tsne(texts)
     dataset.train_datasets = train_datasets
     dataset.eval_datasets = eval_datasets
     dataset.test_datasets = test_datasets

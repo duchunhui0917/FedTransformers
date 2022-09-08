@@ -1,3 +1,4 @@
-from datasets import load_dataset, load_metric, Dataset, DatasetDict
+import numpy as np
 
-load_metric("squad")
+a = np.ones((2, 3))
+print(a)

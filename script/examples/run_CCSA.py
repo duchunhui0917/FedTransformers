@@ -29,7 +29,7 @@ parser.add_argument('--dataset_name', type=str, default='AIMed*IEPA',
                              ])
 
 # training hyperparameters
-parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--model_name', type=str, default='distilbert-base-cased',
                     choices=['CNN',
                              'distilbert-base-cased',

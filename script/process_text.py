@@ -361,53 +361,52 @@ def aug_text(file_name, aug_method='aug', mode='train', process=True):
         f.writelines(liens)
 
 
-def i2b2_txt2h5(name_list):
-    h5_name = '*'.join(name_list)
-    h5_path = os.path.join(base_dir, f'data/{h5_name}_data.h5')
+def i2b2_txt2h5(name):
+    h5_path = os.path.join(base_dir, f'data/{name}_data.h5')
     hf = h5py.File(h5_path, 'w')
     doc_index = {}
     index_list = []
     train_index = []
     test_index = []
     idx = 0
-    for d, name in enumerate(name_list):
-        dir_path = os.path.join(base_dir, f'data/i2b2/{name}/train_data')
-        file_names = os.listdir(dir_path)
-        for file_name in file_names:
-            train_data = os.path.join(base_dir, f'data/i2b2/{name}/train_data/{file_name}')
-            train_target = os.path.join(base_dir, f'data/i2b2/{name}/train_target/{file_name}')
-            with open(train_data, 'r', encoding='utf8') as f:
-                lines = f.readlines()
-            with open(train_target, 'r', encoding='utf8') as f:
-                rels = f.readlines()
 
-            for rel in rels:
-                x, y = process_i2b2_lines(lines, rel)
-                hf[f'/X/{idx}'] = x
-                hf[f'/Y/{idx}'] = y
-                index_list.append(idx)
-                train_index.append(idx)
-                doc_index[idx] = d
-                idx += 1
+    dir_path = os.path.join(base_dir, f'data/i2b2/{name}/train_data')
+    file_names = os.listdir(dir_path)
+    for file_name in file_names:
+        train_data = os.path.join(base_dir, f'data/i2b2/{name}/train_data/{file_name}')
+        train_target = os.path.join(base_dir, f'data/i2b2/{name}/train_target/{file_name}')
+        with open(train_data, 'r', encoding='utf8') as f:
+            lines = f.readlines()
+        with open(train_target, 'r', encoding='utf8') as f:
+            rels = f.readlines()
 
-        dir_path = os.path.join(base_dir, f'data/i2b2/{name}/test_data')
-        file_names = os.listdir(dir_path)
-        for file_name in file_names:
-            test_data = os.path.join(base_dir, f'data/i2b2/{name}/test_data/{file_name}')
-            test_target = os.path.join(base_dir, f'data/i2b2/{name}/test_target/{file_name}')
-            with open(test_data, 'r', encoding='utf8') as f:
-                lines = f.readlines()
-            with open(test_target, 'r', encoding='utf8') as f:
-                rels = f.readlines()
+        for rel in rels:
+            x, y = process_i2b2_lines(lines, rel)
+            hf[f'/X/{idx}'] = x
+            hf[f'/Y/{idx}'] = y
+            index_list.append(idx)
+            train_index.append(idx)
+            doc_index[idx] = 0
+            idx += 1
 
-            for rel in rels:
-                x, y = process_i2b2_lines(lines, rel)
-                hf[f'/X/{idx}'] = x
-                hf[f'/Y/{idx}'] = y
-                index_list.append(idx)
-                test_index.append(idx)
-                doc_index[idx] = d
-                idx += 1
+    dir_path = os.path.join(base_dir, f'data/i2b2/{name}/test_data')
+    file_names = os.listdir(dir_path)
+    for file_name in file_names:
+        test_data = os.path.join(base_dir, f'data/i2b2/{name}/test_data/{file_name}')
+        test_target = os.path.join(base_dir, f'data/i2b2/{name}/test_target/{file_name}')
+        with open(test_data, 'r', encoding='utf8') as f:
+            lines = f.readlines()
+        with open(test_target, 'r', encoding='utf8') as f:
+            rels = f.readlines()
+
+        for rel in rels:
+            x, y = process_i2b2_lines(lines, rel)
+            hf[f'/X/{idx}'] = x
+            hf[f'/Y/{idx}'] = y
+            index_list.append(idx)
+            test_index.append(idx)
+            doc_index[idx] = 0
+            idx += 1
     attributes = {'doc_index': doc_index,
                   'label_vocab': {
                       'TrIP': 0,
@@ -671,3 +670,5 @@ mask_text()
 # aug_text('AIMed_2|2', aug_method='sent_len', mode='test', process=False)
 # h52txt('PGR_Q1')
 # h52txt('AIMed_1|2_balance')
+
+i2b2_txt2h5('Partners')

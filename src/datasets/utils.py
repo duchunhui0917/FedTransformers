@@ -84,6 +84,7 @@ def get_embedding_Kmeans(text, n_clients, path, bsz=16):
 
 
 def sentence_embedding_tsne(texts, bsz=16):
+    num_clients = len(texts)
     embeddings = []
     labels = []
     embedder = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens', device='cuda:0')
@@ -93,11 +94,10 @@ def sentence_embedding_tsne(texts, bsz=16):
         labels.append(np.ones(len(text)) * i)
     embeddings = np.concatenate(embeddings)
     labels = np.concatenate(labels)
-    d = {0: 'SST-2', 1: 'IMDB', 2: 'YELP', 3: 'MR'}
-    labels = [d[label] for label in labels]
+    # d = {0: 'AIMed', 1: 'BioInfer', 2: 'HPRD50', 3: 'IEPA', 4: 'LLL'}
     # d = {0: 'SST-2', 1: 'IMDB', 2: 'YELP', 3: 'MR'}
-    # labels = [d[label] for label in labels]
-
+    d = {i: i for i in range(num_clients)}
+    labels = [d[label] for label in labels]
 
     X_features = TSNE(n_components=2, random_state=33).fit_transform(embeddings)
     palette = sns.color_palette("bright", n_colors=np.unique(labels).shape[0])

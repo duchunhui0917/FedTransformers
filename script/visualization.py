@@ -63,7 +63,7 @@ parser.add_argument('--layers',
 parser.add_argument('--vocab_file', default=os.path.join(base_dir, 'data/glove.6B/glove.6B.100d.json'))
 
 # training hyperparameters
-parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--model_name', type=str, default='emilyalsentzer/Bio_ClinicalBERT',
                     choices=['CNN',
                              'LSTM',

@@ -28,7 +28,7 @@ model.cuda()
 # model.cuda()
 # classifier.cuda()
 
-optimizer = optim.AdamW(model.parameters(), lr=1e-5)
+optimizer = optim.AdamW(model.parameters(), lr=5e-5)
 train_dataset = LineByLineTextDataset(
     tokenizer=tokenizer,
     file_path=train_file,

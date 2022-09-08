@@ -4,13 +4,15 @@ import datetime
 import warnings
 import logging
 import json
+
+import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -19,57 +21,52 @@ base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = '20news'
-dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
-model_type = 'bert'
-model_name = 'bert-base-uncased'
+task_name = 'gigaword'
+dataset_path = os.path.join(base_dir, f"data/gigaword_data.h5")
+model_type = 'bart'
+model_name = 'facebook/bart-base'
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/20news_s223_800_800/{model_name}_0.5_100_5_tgwg")
+                          f"ckpt/centralized/PGR_s223/{model_name}_tgwg")
 
-label_words = json.dumps([
-    ['hockey'], ['baseball'], ['guns'], ['crypt'], ['electronics'], ['mac'], ['motorcycles'],
-    ['mideast'], ['atheism'], ['ms-windows'], ['automobiles'], ['medicine'], ['christian'], ['ibm'],
-    ['sale'], ['politics'], ['windows x'], ['space'], ['graphics'], ['religion']
-])
-
-# template_text = 'Is the topic hockey, baseball, guns, crypt, electronics, mac, motorcycles,' \
-#                 'mideast, atheism, ms-windows, automobiles, medicine, christian, ibm,' \
-#                 'sale, politics, windows x, space, graphics, religion? ' \
-#                 'The Topic of news: {"mask"}. {"placeholder":"text_a"}'
-template_text = 'The topic of news: {"mask"}. {"placeholder":"text_a"}'
-verbalizer = 'proto'
-tunning_name = 'proto'
 config = [
     f'--task_name={task_name}',
     f'--dataset_path={dataset_path}',
-    f'--model_type={model_type}',
     f'--model_name={model_name}',
-    f'--tunning_name={tunning_name}',
+    f'--model_type={model_type}',
     # f'--model_path={model_path}',
     '--lr=5e-5',
-    '--algorithm=centralized',
-    '--split_type=centralized',
+    '--algorithm=FedAvg',
+    '--split_type=uniform_split',
+    '--num_clients=10',
     '--train_batch_size=8',
     '--eval_batch_size=8',
-    f'--template_text={template_text}',
-    f'--label_words={label_words}',
-    f'--verbalizer={verbalizer}',
-    '--max_train_samples=100',
-    '--max_eval_samples=100',
-    '--max_test_samples=100',
-    '--max_seq_length=256',
-    '--decoder_max_length=5',
+    # '--max_train_samples=800',
+    # '--max_eval_samples=800',
+    # '--max_test_samples=800',
     '--seed=223',
     '--num_iterations=100',
     '--do_train=True',
-    '--do_test=True'
+    '--do_test=True',
+    # '--augment=gradient_aug',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_gigaword'
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
+if model_args.augment:
+    model_name += f'_{model_args.augment}'
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
 
@@ -100,8 +97,7 @@ elif fl_args.algorithm == 'MOON':
 else:
     raise NotImplementedError
 
-if data_args.max_train_samples or data_args.max_train_samples or data_args.max_train_samples:
-    task_name += f'_s{fl_args.seed}'
+task_name += f'_s{fl_args.seed}'
 
 if data_args.max_train_samples:
     task_name += f'_{data_args.max_train_samples}'
@@ -169,3 +165,4 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
+    s.get_re_model_gradient_norm()

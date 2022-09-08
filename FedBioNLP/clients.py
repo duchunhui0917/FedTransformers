@@ -33,7 +33,7 @@ class BaseClient(object):
             self.optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr)
         elif self.opt == 'SGD':
             self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr,
-                                       weight_decay=1e-5, momentum=0.9)
+                                       weight_decay=5e-5, momentum=0.9)
         else:
             raise Exception("Invalid optimizer. Must be 'SGD' or 'Adam'.")
 
@@ -308,7 +308,7 @@ class pFedMeClient(BaseClient):
             local_optimizer = optim.Adam(filter(lambda p: p.requires_grad, local_model.parameters()), lr=self.lr)
         elif self.opt == 'SGD':
             local_optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr,
-                                        weight_decay=1e-5, momentum=0.9)
+                                        weight_decay=5e-5, momentum=0.9)
         else:
             raise Exception("Invalid optimizer. Must be 'SGD' or 'Adam'.")
         local_model = nn.DataParallel(local_model)

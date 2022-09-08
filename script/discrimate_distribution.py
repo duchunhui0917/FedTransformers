@@ -29,7 +29,7 @@ parser.add_argument('--task_name', type=str, default='PGR_Q1*PGR_Q2',
                              ])
 
 # training hyperparameters
-parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--model_name', type=str, default='distilbert-base-cased',
                     choices=['CNN',
                              'distilbert-base-cased', 'bert-base-cased', 'dmis-lab/biobert-v1.1'])

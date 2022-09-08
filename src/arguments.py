@@ -16,7 +16,7 @@ SUPERGLUE_DATASETS = list(superglue_task_to_keys.keys())
 TC_DATASETS = ["conll2003", "conll2004", "ontonotes", "ploner"]
 SRL_DATASETS = ["conll2005", "conll2012"]
 QA_DATASETS = ["squad", "squad_v2", "mrqa"]
-RE_DATASETS = ["AIMed", "PGR", "AIMed*PGR", "BioInfer"]
+RE_DATASETS = ["AIMed", "PGR", "AIMed*PGR", "BioInfer", "PPI", "i2b2"]
 SC_DATASETS = [
     "20news", "20news_class6", 'web_of_science', "agnews",
     "sst5", "sst2", "sentiment", "imdb", "rotten_tomatoes", "yelp_polarity", "amazon_polarity",
@@ -26,7 +26,7 @@ SC_DATASETS = [
     "sst2*imdb*yelp_polarity",
     "sst2*imdb*rotten_tomatoes",
 ]
-SS_DATASETS = ["cornell_movie_dialogue", "cnn_dailymail", "opus_books"]
+SS_DATASETS = ["cornell_movie_dialogue", "cnn_dailymail", "opus_books", 'gigaword']
 LM_DATASETS = ['shakespeare', 'eli5']
 
 ADD_PREFIX_SPACE = {

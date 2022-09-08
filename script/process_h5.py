@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-base_dir = os.path.expanduser('~/src')
+base_dir = os.path.expanduser('~/FedTransformers')
 
 
 def get_attributes_text(file_name):
@@ -504,7 +504,12 @@ def over_sampling_h5(file_name, times=1., aug=False, only_false=True):
 
 # undersampling('20news', [1000, 7532], sampled_name='1000')
 # undersampling_by_class('sst_2', [300, 3000, 912, 909], sampled_name='300:3000')
-under_sampling_by_class('i2b2',
-                        [24, 24, 24, 24, 24, 24, 24, 24,
-                         109, 109, 109, 109, 109, 109, 109, 109],
-                        sampled_name='192_872')
+# under_sampling_by_class('i2b2',
+#                         [24, 24, 24, 24, 24, 24, 24, 24,
+#                          109, 109, 109, 109, 109, 109, 109, 109],
+#                         sampled_name='192_872')
+
+# merge_h5(['AIMed_455', 'BioInfer_737', 'HPRD50', 'IEPA', 'LLL'])
+merge_h5(['BIDMC', 'Partners'])
+# under_sampling('AIMed', [455, 104], 'AIMed_455')
+# under_sampling('BioInfer', [737, 154], '737')

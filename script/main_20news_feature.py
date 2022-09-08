@@ -7,7 +7,7 @@ import json
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
@@ -21,48 +21,41 @@ logger = logging.getLogger(os.path.basename(__file__))
 
 task_name = '20news'
 dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
-model_type = 'bert'
-model_name = 'bert-base-uncased'
+algorithm = 'FedAvg'
+split_type = 'feature_split'
+model_name = 'distilbert-base-uncased'
+model_type = 'distilbert'
+tunning_method = 'frozen'
+prompt_method = None
+seed = 221
+dirichlet_alpha = 1
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/20news_s223_800_800/{model_name}_0.5_100_5_tgwg")
+                          f"ckpt/{algorithm}/20news_{seed}_100_100_100/{model_name}_{dirichlet_alpha}_10_5_tgwg")
 
-label_words = json.dumps([
-    ['hockey'], ['baseball'], ['guns'], ['crypt'], ['electronics'], ['mac'], ['motorcycles'],
-    ['mideast'], ['atheism'], ['ms-windows'], ['automobiles'], ['medicine'], ['christian'], ['ibm'],
-    ['sale'], ['politics'], ['windows x'], ['space'], ['graphics'], ['religion']
-])
-
-# template_text = 'Is the topic hockey, baseball, guns, crypt, electronics, mac, motorcycles,' \
-#                 'mideast, atheism, ms-windows, automobiles, medicine, christian, ibm,' \
-#                 'sale, politics, windows x, space, graphics, religion? ' \
-#                 'The Topic of news: {"mask"}. {"placeholder":"text_a"}'
-template_text = 'The topic of news: {"mask"}. {"placeholder":"text_a"}'
-verbalizer = 'proto'
-tunning_name = 'proto'
 config = [
     f'--task_name={task_name}',
     f'--dataset_path={dataset_path}',
-    f'--model_type={model_type}',
     f'--model_name={model_name}',
-    f'--tunning_name={tunning_name}',
+    f'--model_type={model_type}',
     # f'--model_path={model_path}',
+    # f'--tunning_method={tunning_method}',
+    # f'--prompt_method={prompt_method}',
     '--lr=5e-5',
-    '--algorithm=centralized',
-    '--split_type=centralized',
+    f'--algorithm={algorithm}',
+    f'--split_type={split_type}',
+    '--num_clients=10',
+    # '--select_ratio=0.1',
+    '--num_epochs=1',
     '--train_batch_size=8',
     '--eval_batch_size=8',
-    f'--template_text={template_text}',
-    f'--label_words={label_words}',
-    f'--verbalizer={verbalizer}',
-    '--max_train_samples=100',
-    '--max_eval_samples=100',
-    '--max_test_samples=100',
-    '--max_seq_length=256',
-    '--decoder_max_length=5',
-    '--seed=223',
+    # '--max_train_samples=100',
+    # '--max_eval_samples=100',
+    # '--max_test_samples=100',
+    f'--seed={seed}',
     '--num_iterations=100',
     '--do_train=True',
-    '--do_test=True'
+    '--do_test=True',
+    # '--tgwp=True'
 ]
 
 parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
@@ -72,6 +65,8 @@ set_seed(fl_args.seed)
 model_name = model_name.replace('/', '_')
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
+if model_args.prompt_method:
+    model_name += f'_{model_args.prompt_method}'
 
 if fl_args.split_type == 'label_split':
     ckpt = f'{model_name}_{fl_args.dirichlet_alpha}_{fl_args.num_clients}_{fl_args.num_epochs}'
@@ -100,8 +95,7 @@ elif fl_args.algorithm == 'MOON':
 else:
     raise NotImplementedError
 
-if data_args.max_train_samples or data_args.max_train_samples or data_args.max_train_samples:
-    task_name += f'_s{fl_args.seed}'
+task_name += f'_s{fl_args.seed}'
 
 if data_args.max_train_samples:
     task_name += f'_{data_args.max_train_samples}'
