@@ -4,9 +4,8 @@ import datetime
 import warnings
 import logging
 import json
-
-import wandb
 from transformers import HfArgumentParser
+import wandb
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -21,12 +20,17 @@ base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = 'i2b2'
-dataset_path = os.path.join(base_dir, f"data/i2b2_data.h5")
-model_type = 'distilbert'
+task_name = '20news'
+dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
+algorithm = 'FedAvg'
+split_type = 'uniform_split'
 model_name = 'distilbert-base-uncased'
+model_type = 'distilbert'
+tunning_method = 'prefix_tunning'
+prompt_method = None
+seed = 221
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/i2b2_s223/{model_name}_tgwg")
+                          f"ckpt/{algorithm}/20news_{seed}_100_100_100/{model_name}_10_5_tgwg")
 
 config = [
     f'--task_name={task_name}',
@@ -34,21 +38,26 @@ config = [
     f'--model_name={model_name}',
     f'--model_type={model_type}',
     # f'--model_path={model_path}',
-    '--lr=5e-5',
-    '--algorithm=centralized',
-    '--split_type=centralized',
-    '--train_batch_size=8',
-    '--eval_batch_size=8',
-    # '--max_train_samples=800',
-    # '--max_eval_samples=800',
-    # '--max_test_samples=800',
-    '--seed=223',
+    f'--tunning_method={tunning_method}',
+    # f'--prompt_method={prompt_method}',
+    '--lr=5e-3',
+    f'--algorithm={algorithm}',
+    f'--split_type={split_type}',
+    '--num_clients=10',
+    # '--select_ratio=0.1',
+    '--num_epochs=3',
+    '--train_batch_size=32',
+    '--eval_batch_size=32',
+    # '--max_train_samples=100',
+    # '--max_eval_samples=100',
+    # '--max_test_samples=100',
+    f'--seed={seed}',
     '--num_iterations=100',
     '--do_train=True',
     '--do_test=True',
-    # '--augment=gradient_aug',
+    # '--tgwp=True',
     f'--enable_wandb=True',
-    f'--project_name=FedTransformers_i2b2'
+    f'--project_name=FedTransformers_20news'
 ]
 
 parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
@@ -64,10 +73,10 @@ if wandb_args.enable_wandb:
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
-if model_args.augment:
-    model_name += f'_{model_args.augment}'
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
+if model_args.prompt_method:
+    model_name += f'_{model_args.prompt_method}'
 
 if fl_args.split_type == 'label_split':
     ckpt = f'{model_name}_{fl_args.dirichlet_alpha}_{fl_args.num_clients}_{fl_args.num_epochs}'
@@ -164,4 +173,5 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
-    s.get_re_model_gradient_norm()
+
+wandb.finish()

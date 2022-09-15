@@ -9,7 +9,7 @@ import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
@@ -22,9 +22,9 @@ warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
 task_name = 'i2b2'
-dataset_path = os.path.join(base_dir, f"data/BIDMC*Partners_data.h5")
-model_type = 'bert'
-model_name = 'bert-base-uncased'
+dataset_path = os.path.join(base_dir, f"data/i2b2_data.h5")
+model_type = 'distilbert'
+model_name = 'distilbert-base-uncased'
 model_path = os.path.join(base_dir,
                           f"ckpt/centralized/PGR_s223/{model_name}_tgwg")
 
@@ -37,7 +37,7 @@ config = [
     '--lr=5e-5',
     '--algorithm=FedAvg',
     '--split_type=uniform_split',
-    '--num_clients=2',
+    '--num_clients=10',
     '--train_batch_size=8',
     '--eval_batch_size=8',
     # '--max_train_samples=800',

@@ -78,7 +78,7 @@ class SequenceClassificationModel(nn.Module):
             elif tunning_method == 'prefix_tunning':
                 self.encoder = AutoAdapterModel.from_pretrained(model_name)
                 adapter_config = PrefixTuningConfig(flat=True,
-                                                    prefix_length=96)
+                                                    prefix_length=32)
                 self.encoder.add_adapter(tunning_method, config=adapter_config)
                 # self.encoder.eject_prefix_tuning(tunning_method)
                 if prompt_method:

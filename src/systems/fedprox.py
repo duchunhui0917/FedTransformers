@@ -1,46 +1,50 @@
-from .base import Base
-from src.clients.base import BaseClient
+import wandb
+
+from FedBioNLP.utils.status_utils import tensor_cos_sim
+from .fedavg import FedAvg
+from src.clients.fedprox import FedProxClient
 import random
 import os
+import numpy as np
 import logging
+import torch
+import copy
+import json
+import tqdm
+from sklearn.metrics.pairwise import cosine_similarity
+
+from ..utils.status_utils import cmp_CKA_sim
 
 logger = logging.getLogger(os.path.basename(__file__))
 
 
-class FedProx(Base):
+class FedProx(FedAvg):
     def __init__(self, dataset, model, args):
         super(FedProx, self).__init__(dataset, model, args)
-        self.aggregate_method = args.aggregate_method
 
-        self.central_client = BaseClient(None, dataset, model, args)
+        self.clients = []
+        t = tqdm.tqdm(range(self.num_clients))
+        for i in t:
+            self.clients.append(FedProxClient(i, dataset, model, args))
 
-        self.clients = [
-            BaseClient(i, dataset, model, args) for i in range(self.num_clients)
-        ]
-        self.momentum = args.server_momentum
-        self.layers = args.layers.split('*')
-        self.select_ratio = args.select_ratio
-        self.model_cos_sims = {}
-        self.grad_cos_sims = {}
-
-    def run(self, m='f1'):
+    def run(self):
         for self.ite in range(self.num_iterations):
             logger.info(f'********iteration: {self.ite}********')
 
-            # 1. distribute server model to all clients
-            global_model_dict = self.model.state_dict()
-            for client in self.clients:
-                client.receive_global_model(global_model_dict)
-
-            # 2. select clients
+            # 1. select clients
             select_clients = random.sample(list(range(self.num_clients)), int(self.num_clients * self.select_ratio))
             select_clients.sort()
             weights = self.compute_weights(select_clients)
 
-            # 2. train client models
+            # 2. distribute server model to all clients
+            global_model_dict = self.model.state_dict()
+            for i in select_clients:
+                self.clients[i].receive_global_model(global_model_dict)
+
+            # 3. train client models
             model_dicts = []
             for i in select_clients:
-                model_state_dict = self.clients[i].train_model(self.ite)
+                model_state_dict, scalars = self.clients[i].train_model(self.ite)
                 model_dicts.append(model_state_dict)
                 # print(i, int(torch.cuda.memory_allocated() / (1024 * 1024)))
                 # print(i, int(torch.cuda.max_memory_allocated() / (1024 * 1024)))
@@ -50,10 +54,23 @@ class FedProx(Base):
             # logger.info('compute model cosine similarity')
             # self.compute_model_cos_sims(model_dicts)
 
-            # 3. aggregate into server model
+            # 4. aggregate into server model
             model_dict = self.get_global_model_dict(model_dicts, weights)
             self.model.load_state_dict(model_dict)
 
             # test and save models
             if self.ite % self.test_frequency == 0:
-                self.test_save_models(m, select_clients)
+                features = self.test_save_models(select_clients)
+                np.set_printoptions(precision=3)
+                n = len(features)
+                if n != 0:
+                    l = len(features[0])
+                    for ll in range(l):
+                        matrix = np.zeros((n, n))
+                        for i in range(n):
+                            for j in range(n):
+                                sim = cmp_CKA_sim(features[i][ll], features[j][ll])
+                                matrix[i][j] = sim
+                        avg = (matrix - np.eye(n, n)).sum() / (n * n - n)
+                        logger.info('\n' + '\n'.join([str(_) for _ in matrix]))
+                        logger.info(f'average CKA: {avg}')

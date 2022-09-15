@@ -97,19 +97,22 @@ class Sequence2SequenceDataset:
         if data_args.max_train_samples is not None:
             sampled_idxes = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
             train_dataset = train_dataset.select(sampled_idxes)
-        self.train_dataset = train_dataset.map(self.process_fn, batched=True, load_from_cache_file=False)
+        self.train_dataset = train_dataset.map(self.process_fn, batched=True, batch_size=len(train_dataset),
+                                               load_from_cache_file=False)
 
         logger.info('processing eval dataset')
         if data_args.max_eval_samples is not None:
             sampled_idxes = random.sample(range(len(eval_dataset)), k=data_args.max_eval_samples)
             eval_dataset = eval_dataset.select(sampled_idxes)
-        self.eval_dataset = eval_dataset.map(self.process_fn, batched=True, load_from_cache_file=False)
+        self.eval_dataset = eval_dataset.map(self.process_fn, batched=True, batch_size=len(eval_dataset),
+                                             load_from_cache_file=False)
 
         logger.info('processing test dataset')
         if data_args.max_test_samples is not None:
             sampled_idxes = random.sample(range(len(test_dataset)), k=data_args.max_test_samples)
             test_dataset = test_dataset.select(sampled_idxes)
-        self.test_dataset = test_dataset.map(self.process_fn, batched=True, load_from_cache_file=False)
+        self.test_dataset = test_dataset.map(self.process_fn, batched=True, batch_size=len(test_dataset),
+                                             load_from_cache_file=False)
 
     def process_fn(self, examples):
         if self.model_name == 'LSTM':

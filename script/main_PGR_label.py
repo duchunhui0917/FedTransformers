@@ -21,12 +21,12 @@ base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = 'i2b2'
-dataset_path = os.path.join(base_dir, f"data/i2b2_data.h5")
-model_type = 'distilbert'
-model_name = 'distilbert-base-uncased'
+task_name = 'PGR'
+dataset_path = os.path.join(base_dir, f"data/PGR_Q1_data.h5")
+model_type = 'bert'
+model_name = 'bert-base-uncased'
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/i2b2_s223/{model_name}_tgwg")
+                          f"ckpt/centralized/PGR_s223/{model_name}_tgwg")
 
 config = [
     f'--task_name={task_name}',
@@ -35,8 +35,11 @@ config = [
     f'--model_type={model_type}',
     # f'--model_path={model_path}',
     '--lr=5e-5',
-    '--algorithm=centralized',
-    '--split_type=centralized',
+    '--algorithm=FedAvg',
+    '--split_type=label_split',
+    '--num_clients=10',
+    '--num_epochs=1',
+    '--dirichlet_alpha=0.5',
     '--train_batch_size=8',
     '--eval_batch_size=8',
     # '--max_train_samples=800',
@@ -48,7 +51,7 @@ config = [
     '--do_test=True',
     # '--augment=gradient_aug',
     f'--enable_wandb=True',
-    f'--project_name=FedTransformers_i2b2'
+    f'--project_name=FedTransformers_PGR'
 ]
 
 parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))

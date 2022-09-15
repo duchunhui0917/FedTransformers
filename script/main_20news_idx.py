@@ -63,6 +63,8 @@ config = [
     f'--partition_path={partition_path}',
     f'--partition_group={partition_group}',
     f'--enable_wandb=True',
+    f'--project_name=FedTransformers_20news'
+
 ]
 
 parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))

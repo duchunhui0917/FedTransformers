@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 from collections import OrderedDict
 from .utils import BatchIterator, AverageMeter
 from .base import BaseClient
-from ..optimers import WPOptim
 import os
 import logging
 from transformers import DefaultDataCollator
@@ -16,12 +15,10 @@ logger = logging.getLogger(os.path.basename(__file__))
 base_dir = os.path.expanduser('~/FedTransformers')
 
 
-class HarmoFLClient(BaseClient):
+class FedProxClient(BaseClient):
     def __init__(self, client_id, dataset, model, args):
-        super(HarmoFLClient, self).__init__(client_id, dataset, model, args)
-        self.perturbation = args.perturbation
-        self.optimizer = WPOptim(params=self.model.parameters(), base_optimizer=optim.Adam, lr=self.lr,
-                                 alpha=self.perturbation, weight_decay=1e-4)
+        super(FedProxClient, self).__init__(client_id, dataset, model, args)
+        self.mu = args.mu
 
     def train_model(self, ite=None):
         global_model = copy.deepcopy(self.model)
@@ -32,8 +29,7 @@ class HarmoFLClient(BaseClient):
 
         model = self.model.cuda()
         if self.optimizer_sd:
-            self.optimizer = WPOptim(params=self.model.parameters(), base_optimizer=optim.Adam, lr=self.lr,
-                                     alpha=self.perturbation, weight_decay=1e-4)
+            self.optimizer = optim.AdamW(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr)
             if self.task_name == 'shakespeare':
                 self.optimizer_sd = torch.load(self.optimizer_sd_path)
             state = self.optimizer_sd['state']
@@ -55,32 +51,29 @@ class HarmoFLClient(BaseClient):
                 t = tqdm(ite_train_loader, ncols=0)
 
             for i, data in enumerate(t):
+                nl = 0
+                count = 0
+
+                for (name1, param1), (name2, param2) in zip(model.named_parameters(),
+                                                            global_model.named_parameters()):
+                    nl = (nl * count + torch.norm(param1 - param2, 2)) / (count + 1)
+                    count += 1
+
                 d = OrderedDict(id=self.client_id)
+                for key, val in data.items():
+                    data[key] = val.cuda()
+                if ite is not None:
+                    labels, features, logits, losses = model(data, ite)
+                else:
+                    labels, features, logits, losses = model(data)
+
+                cel = losses[0]
+                losses.append(nl)
+                loss = cel + self.mu * nl
+
+                loss.backward()
+                self.optimizer.step()
                 self.optimizer.zero_grad()
-
-                tmp_data = copy.deepcopy(data)
-                for key, val in data.items():
-                    tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
-                # compute the gradient
-                losses[0].mean().backward()
-                # normalize the gradient and add it to the parameters
-                self.optimizer.generate_delta(zero_grad=True)
-
-                tmp_data = copy.deepcopy(data)
-                for key, val in data.items():
-                    tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
-                # compute the gradient of the parameters with perturbation
-                losses[0].mean().backward()
-                # gradient descent
-                self.optimizer.step(zero_grad=True)
 
                 labels = [label.cpu().detach().numpy() for label in labels]
                 logits = [logit.cpu().detach().numpy() for logit in logits]

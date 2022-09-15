@@ -7,10 +7,18 @@ from typing import Optional
 from transformers import HfArgumentParser, TrainingArguments
 from .datasets.glue import task_to_keys as glue_task_to_keys
 from .datasets.superglue import task_to_keys as superglue_task_to_keys
+from .systems import Base, FedAvg, FedProx, MOON, HarmoFL
 import os
 
 base_dir = os.path.expanduser('~/src')
 
+SYSTEMS = {
+    "centralized": Base,
+    "FedAvg": FedAvg,
+    "FedProx": FedProx,
+    "MOON": MOON,
+    "HarmoFL": HarmoFL
+}
 GLUE_DATASETS = list(glue_task_to_keys.keys())
 SUPERGLUE_DATASETS = list(superglue_task_to_keys.keys())
 TC_DATASETS = ["conll2003", "conll2004", "ontonotes", "ploner"]
@@ -387,6 +395,18 @@ class FederatedLearningArguments:
     )
     partition_group: Optional[str] = field(
         default='',
+        metadata={}
+    )
+    mu: Optional[float] = field(
+        default=0.1,
+        metadata={}
+    )
+    temperature: Optional[float] = field(
+        default=0.07,
+        metadata={}
+    )
+    perturbation: Optional[float] = field(
+        default=5e-2,
         metadata={}
     )
 

@@ -5,12 +5,13 @@ import warnings
 import logging
 import json
 from transformers import HfArgumentParser
+import wandb
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -22,13 +23,15 @@ logger = logging.getLogger(os.path.basename(__file__))
 task_name = '20news'
 dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
 algorithm = 'FedAvg'
-split_type = 'label_split'
+split_type = 'idx_split'
+partition_path = os.path.join(base_dir, 'data/partition_files/20news_partition.h5')
+partition_group = 'niid_label_clients=100_alpha=5.0'
 model_name = 'distilbert-base-uncased'
 model_type = 'distilbert'
 tunning_method = 'frozen'
 prompt_method = None
 seed = 221
-dirichlet_alpha = 1
+dirichlet_alpha = 0.01
 model_path = os.path.join(base_dir,
                           f"ckpt/{algorithm}/20news_{seed}_100_100_100/{model_name}_{dirichlet_alpha}_10_5_tgwg")
 
@@ -43,9 +46,9 @@ config = [
     '--lr=5e-5',
     f'--algorithm={algorithm}',
     f'--split_type={split_type}',
-    '--num_clients=100',
-    '--select_ratio=0.1',
-    '--num_epochs=1',
+    '--num_clients=10',
+    # '--select_ratio=0.1',
+    '--num_epochs=3',
     f'--dirichlet_alpha={dirichlet_alpha}',
     '--train_batch_size=8',
     '--eval_batch_size=8',
@@ -56,11 +59,21 @@ config = [
     '--num_iterations=100',
     '--do_train=True',
     '--do_test=True',
-    # '--tgwp=True'
+    # '--tgwp=True',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_20news'
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
@@ -164,3 +177,5 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
+
+wandb.finish()

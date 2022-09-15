@@ -1,7 +1,9 @@
 import os
 import openai
 
-openai.api_key = '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'
+openai.api_key = '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'
+
+
 label_words = [
     ['hockey'], ['baseball'], ['guns'], ['crypt'], ['electronics'], ['mac'], ['motorcycles'],
     ['mideast'], ['atheism'], ['microsoft windows'], ['automobiles'], ['medicine'], ['christian'], ['IBM'],

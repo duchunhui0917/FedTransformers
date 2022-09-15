@@ -33,6 +33,76 @@ def update_dict(idxes, doc_index, unique_docs, d, df, label_vocab):
         unique_docs.add(doc)
 
 
+def parse(texts, examples, tokenizer):
+    examples.update({
+        "input_ids": [],
+        "attention_mask": [],
+        "e1_mask": [],
+        "e2_mask": [],
+        "labels": examples["label"]
+    })
+
+    for text in texts:
+        text_ls = text.split(' ')
+
+        # add [CLS] token
+        tokens = ["[CLS]"]
+        e1_mask = [0]
+        e2_mask = [0]
+        e1_mask_val = 0
+        e2_mask_val = 0
+        for i, word in enumerate(text_ls):
+            if word in ["<e1>", "</e1>", "<e2>", "</e2>"]:
+                if word in ["<e1>"]:
+                    e1_mask_val = 1
+                elif word in ["</e1>"]:
+                    e1_mask_val = 0
+                if word in ["<e2>"]:
+                    e2_mask_val = 1
+                elif word in ["</e2>"]:
+                    e2_mask_val = 0
+                continue
+
+            token = tokenizer.tokenize(word)
+
+            tokens.extend(token)
+            e1_mask.extend([e1_mask_val] * len(token))
+            e2_mask.extend([e2_mask_val] * len(token))
+
+        # add [SEP] token
+        tokens.append("[SEP]")
+        e1_mask.append(0)
+        e2_mask.append(0)
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        attention_mask = [1] * len(input_ids)
+
+        examples["input_ids"].append(input_ids)
+        examples["attention_mask"].append(attention_mask)
+        examples["e1_mask"].append(e1_mask)
+        examples["e2_mask"].append(e2_mask)
+
+    max_length = max([len(token) for token in examples["input_ids"]])
+    # logger.info(f'max sequence length: {max_length}')
+    ls = zip(examples["input_ids"], examples["attention_mask"],
+             examples["e1_mask"], examples["e2_mask"])
+
+    for i, (input_ids, attention_mask, e1_mask, e2_mask) in enumerate(ls):
+        # zero-pad up to the sequence length
+        padding = [0] * (max_length - len(input_ids))
+
+        examples['input_ids'][i] = input_ids + padding
+        examples['attention_mask'][i] = attention_mask + padding
+        examples['e1_mask'][i] = e1_mask + padding
+        examples['e2_mask'][i] = e2_mask + padding
+
+        assert len(examples['input_ids'][i]) == max_length
+        assert len(examples['attention_mask'][i]) == max_length
+        assert len(examples['e1_mask'][i]) == max_length
+        assert len(examples['e2_mask'][i]) == max_length
+
+    return examples
+
+
 class RelationExtractionDataset:
     def __init__(self, data_args, model_args):
         self.task_name = data_args.task_name
@@ -115,70 +185,7 @@ class RelationExtractionDataset:
             pass
         else:
             texts = examples['text']
-            examples.update({
-                "input_ids": [],
-                "attention_mask": [],
-                "e1_mask": [],
-                "e2_mask": [],
-                "labels": examples["label"]
-            })
-
-            for text in texts:
-                text_ls = text.split(' ')
-
-                # add [CLS] token
-                tokens = ["[CLS]"]
-                e1_mask = [0]
-                e2_mask = [0]
-                e1_mask_val = 0
-                e2_mask_val = 0
-                for i, word in enumerate(text_ls):
-                    if word in ["<e1>", "</e1>", "<e2>", "</e2>"]:
-                        if word in ["<e1>"]:
-                            e1_mask_val = 1
-                        elif word in ["</e1>"]:
-                            e1_mask_val = 0
-                        if word in ["<e2>"]:
-                            e2_mask_val = 1
-                        elif word in ["</e2>"]:
-                            e2_mask_val = 0
-                        continue
-
-                    token = self.tokenizer.tokenize(word)
-
-                    tokens.extend(token)
-                    e1_mask.extend([e1_mask_val] * len(token))
-                    e2_mask.extend([e2_mask_val] * len(token))
-
-                # add [SEP] token
-                tokens.append("[SEP]")
-                e1_mask.append(0)
-                e2_mask.append(0)
-                input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                attention_mask = [1] * len(input_ids)
-
-                examples["input_ids"].append(input_ids)
-                examples["attention_mask"].append(attention_mask)
-                examples["e1_mask"].append(e1_mask)
-                examples["e2_mask"].append(e2_mask)
-
-            max_length = max([len(token) for token in examples["input_ids"]])
-            logger.info(f'max sequence length: {max_length}')
-            ls = zip(examples["input_ids"], examples["attention_mask"],
-                     examples["e1_mask"], examples["e2_mask"])
-            for i, (input_ids, attention_mask, e1_mask, e2_mask) in enumerate(ls):
-                # zero-pad up to the sequence length
-                padding = [0] * (max_length - len(input_ids))
-
-                examples['input_ids'][i] = input_ids + padding
-                examples['attention_mask'][i] = attention_mask + padding
-                examples['e1_mask'][i] = e1_mask + padding
-                examples['e2_mask'][i] = e2_mask + padding
-
-                assert len(examples['input_ids'][i]) == max_length
-                assert len(examples['attention_mask'][i]) == max_length
-                assert len(examples['e1_mask'][i]) == max_length
-                assert len(examples['e2_mask'][i]) == max_length
+            examples = parse(texts, examples, self.tokenizer)
 
             if self.augment == 'gradient_aug':
                 path = os.path.join(base_dir, f'data/weight/{self.task_name}_s233_800.json')

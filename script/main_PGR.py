@@ -4,13 +4,15 @@ import datetime
 import warnings
 import logging
 import json
+
+import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -31,7 +33,7 @@ config = [
     f'--dataset_path={dataset_path}',
     f'--model_name={model_name}',
     f'--model_type={model_type}',
-    f'--model_path={model_path}',
+    # f'--model_path={model_path}',
     '--lr=5e-5',
     '--algorithm=centralized',
     '--split_type=centralized',
@@ -42,13 +44,23 @@ config = [
     # '--max_test_samples=800',
     '--seed=223',
     '--num_iterations=100',
-    '--do_train=False',
+    '--do_train=True',
     '--do_test=True',
     # '--augment=gradient_aug',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_PGR'
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')

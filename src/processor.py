@@ -81,10 +81,14 @@ def label_split(dataset, fl_args):
     eval_datasets = []
     test_datasets = []
 
+    texts = []
     for i in range(num_clients):
         train_idx = train_idxes[i]
         num_train = len(train_idx)
-        train_datasets.append(select(train_dataset, train_idx))
+        cur_train_dataset = select(train_dataset, train_idx)
+        train_datasets.append(cur_train_dataset)
+        if 'text' in cur_train_dataset.column_names:
+            texts.append(cur_train_dataset['text'])
 
         eval_idx = eval_idxes[i]
         num_eval = len(eval_idx)
@@ -94,6 +98,9 @@ def label_split(dataset, fl_args):
         num_test = len(test_idx)
         test_datasets.append(select(test_dataset, test_idx))
         logger.info(f'client {i}, number of samples of train/eval/test dataset: {num_train}/{num_eval}/{num_test}')
+    if len(texts) != 0:
+        sentence_embedding_tsne(texts)
+
     dataset.train_datasets = train_datasets
     dataset.eval_datasets = eval_datasets
     dataset.test_datasets = test_datasets

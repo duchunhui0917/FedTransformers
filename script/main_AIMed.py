@@ -7,7 +7,7 @@ import json
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
@@ -20,11 +20,11 @@ warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
 task_name = 'AIMed'
-dataset_path = os.path.join(base_dir, f"data/AIMed_data.h5")
-model_type = 'bert'
-model_name = 'bert-base-uncased'
+dataset_path = os.path.join(base_dir, f"data/PGR_Q1_data.h5")
+model_type = 'distilbert'
+model_name = 'distilbert-base-uncased'
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/AIMed_s223/{model_name}_tgwg")
+                          f"ckpt/centralized/PGR_s223/{model_name}_tgwg")
 
 config = [
     f'--task_name={task_name}',
@@ -54,7 +54,6 @@ set_seed(fl_args.seed)
 model_name = model_name.replace('/', '_')
 if model_args.augment:
     model_name += f'_{model_args.augment}'
-
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
 
@@ -152,5 +151,5 @@ if fl_args.do_train:
     s.run()
 
 if fl_args.do_test:
-    s.eval_model(data_loader=s.central_client.eval_loader)
+    s.eval_model(data_loader=s.central_client.test_loader)
     s.get_re_model_gradient_norm()

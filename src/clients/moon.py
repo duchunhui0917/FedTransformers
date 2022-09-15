@@ -3,11 +3,11 @@ import torch
 import copy
 from torch import optim, nn
 from tqdm import tqdm
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from collections import OrderedDict
 from .utils import BatchIterator, AverageMeter
 from .base import BaseClient
-from ..optimers import WPOptim
 import os
 import logging
 from transformers import DefaultDataCollator
@@ -16,24 +16,26 @@ logger = logging.getLogger(os.path.basename(__file__))
 base_dir = os.path.expanduser('~/FedTransformers')
 
 
-class HarmoFLClient(BaseClient):
+class MOONClient(BaseClient):
     def __init__(self, client_id, dataset, model, args):
-        super(HarmoFLClient, self).__init__(client_id, dataset, model, args)
-        self.perturbation = args.perturbation
-        self.optimizer = WPOptim(params=self.model.parameters(), base_optimizer=optim.Adam, lr=self.lr,
-                                 alpha=self.perturbation, weight_decay=1e-4)
+        super(MOONClient, self).__init__(client_id, dataset, model, args)
+        self.pre_model = copy.deepcopy(self.model)
+        self.mu = args.mu
+        self.temperature = args.temperature
 
     def train_model(self, ite=None):
         global_model = copy.deepcopy(self.model)
         global_model.cuda()
+
+        pre_model = copy.deepcopy(self.pre_model)
+        pre_model.cuda()
 
         if not self.train_loader:
             return copy.deepcopy(self.model.state_dict()), None
 
         model = self.model.cuda()
         if self.optimizer_sd:
-            self.optimizer = WPOptim(params=self.model.parameters(), base_optimizer=optim.Adam, lr=self.lr,
-                                     alpha=self.perturbation, weight_decay=1e-4)
+            self.optimizer = optim.AdamW(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr)
             if self.task_name == 'shakespeare':
                 self.optimizer_sd = torch.load(self.optimizer_sd_path)
             state = self.optimizer_sd['state']
@@ -55,32 +57,47 @@ class HarmoFLClient(BaseClient):
                 t = tqdm(ite_train_loader, ncols=0)
 
             for i, data in enumerate(t):
+                nl = 0
+                count = 0
+
+                for (name1, param1), (name2, param2) in zip(model.named_parameters(),
+                                                            global_model.named_parameters()):
+                    nl = (nl * count + torch.norm(param1 - param2, 2)) / (count + 1)
+                    count += 1
+
                 d = OrderedDict(id=self.client_id)
+                tmp_data = copy.deepcopy(data)
+                for key, val in data.items():
+                    tmp_data[key] = val.cuda()
+                if ite is not None:
+                    labels, features, logits, losses = model(tmp_data, ite)
+                else:
+                    labels, features, logits, losses = model(tmp_data)
+
+                with torch.no_grad():
+                    tmp_data = copy.deepcopy(data)
+                    for key, val in data.items():
+                        tmp_data[key] = val.cuda()
+                    global_labels, global_features, global_logits, global_losses = global_model(tmp_data)
+                    tmp_data = copy.deepcopy(data)
+                    for key, val in data.items():
+                        tmp_data[key] = val.cuda()
+                    pre_labels, pre_features, pre_logits, pre_losses = pre_model(tmp_data)
+
+                    pos_sim = F.cosine_similarity(features[-1], global_features[-1], dim=-1)
+                    pos_sim = torch.exp(pos_sim / self.temperature)
+                    neg_sim = F.cosine_similarity(features[-1], pre_features[-1], dim=-1)
+                    neg_sim = torch.exp(neg_sim / self.temperature)
+
+                    scl = -1.0 * torch.log(pos_sim / (pos_sim + neg_sim)).mean()
+
+                cel = losses[0]
+                losses.append(scl)
+                loss = cel + self.mu * scl
+
+                loss.backward()
+                self.optimizer.step()
                 self.optimizer.zero_grad()
-
-                tmp_data = copy.deepcopy(data)
-                for key, val in data.items():
-                    tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
-                # compute the gradient
-                losses[0].mean().backward()
-                # normalize the gradient and add it to the parameters
-                self.optimizer.generate_delta(zero_grad=True)
-
-                tmp_data = copy.deepcopy(data)
-                for key, val in data.items():
-                    tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
-                # compute the gradient of the parameters with perturbation
-                losses[0].mean().backward()
-                # gradient descent
-                self.optimizer.step(zero_grad=True)
 
                 labels = [label.cpu().detach().numpy() for label in labels]
                 logits = [logit.cpu().detach().numpy() for logit in logits]
@@ -127,4 +144,6 @@ class HarmoFLClient(BaseClient):
         torch.cuda.empty_cache()
         sd = copy.deepcopy(model.state_dict())
         d.pop('id')
+
+        self.pre_model = copy.deepcopy(self.model)
         return sd, d

@@ -5,12 +5,13 @@ import warnings
 import logging
 import json
 from transformers import HfArgumentParser
+import wandb
 
 sys.path.append('..')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -25,10 +26,10 @@ algorithm = 'FedAvg'
 split_type = 'feature_split'
 model_name = 'distilbert-base-uncased'
 model_type = 'distilbert'
-tunning_method = 'frozen'
+tunning_method = 'prefix_tunning'
 prompt_method = None
 seed = 221
-dirichlet_alpha = 1
+dirichlet_alpha = 0.01
 model_path = os.path.join(base_dir,
                           f"ckpt/{algorithm}/20news_{seed}_100_100_100/{model_name}_{dirichlet_alpha}_10_5_tgwg")
 
@@ -38,16 +39,17 @@ config = [
     f'--model_name={model_name}',
     f'--model_type={model_type}',
     # f'--model_path={model_path}',
-    # f'--tunning_method={tunning_method}',
+    f'--tunning_method={tunning_method}',
     # f'--prompt_method={prompt_method}',
-    '--lr=5e-5',
+    '--lr=5e-3',
     f'--algorithm={algorithm}',
     f'--split_type={split_type}',
     '--num_clients=10',
     # '--select_ratio=0.1',
-    '--num_epochs=1',
-    '--train_batch_size=8',
-    '--eval_batch_size=8',
+    '--num_epochs=3',
+    f'--dirichlet_alpha={dirichlet_alpha}',
+    '--train_batch_size=32',
+    '--eval_batch_size=32',
     # '--max_train_samples=100',
     # '--max_eval_samples=100',
     # '--max_test_samples=100',
@@ -55,11 +57,22 @@ config = [
     '--num_iterations=100',
     '--do_train=True',
     '--do_test=True',
-    # '--tgwp=True'
+    # '--tgwp=True',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_20news'
+
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
@@ -163,3 +176,5 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
+
+wandb.finish()
