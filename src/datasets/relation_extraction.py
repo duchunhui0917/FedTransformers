@@ -5,6 +5,8 @@ from datasets import load_dataset, load_metric, Dataset, DatasetDict
 import torch
 import logging
 import os
+
+from sklearn.metrics import confusion_matrix
 from transformers import AutoTokenizer, DataCollatorWithPadding
 import h5py
 from tqdm import tqdm
@@ -166,18 +168,29 @@ class RelationExtractionDataset:
         if data_args.max_train_samples is not None:
             sampled_idxes = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
             train_dataset = train_dataset.select(sampled_idxes)
+            self.train_samples = data_args.max_train_samples
+        else:
+            self.train_samples = len(train_dataset)
+
         self.train_dataset = train_dataset.map(self.process_fn, batched=True, batch_size=len(train_dataset))
 
         logger.info('processing eval dataset')
         if data_args.max_eval_samples is not None:
             sampled_idxes = random.sample(range(len(eval_dataset)), k=data_args.max_eval_samples)
             eval_dataset = eval_dataset.select(sampled_idxes)
+            self.eval_samples = data_args.max_eval_samples
+        else:
+            self.eval_samples = len(train_dataset)
+
         self.eval_dataset = eval_dataset.map(self.process_fn, batched=True, batch_size=len(eval_dataset))
 
         logger.info('processing test dataset')
         if data_args.max_test_samples is not None:
             sampled_idxes = random.sample(range(len(test_dataset)), k=data_args.max_test_samples)
             test_dataset = test_dataset.select(sampled_idxes)
+            self.test_samples = data_args.max_test_samples
+        else:
+            self.test_samples = len(test_dataset)
         self.test_dataset = test_dataset.map(self.process_fn, batched=True, batch_size=len(test_dataset))
 
     def process_fn(self, examples):
@@ -226,6 +239,12 @@ class RelationExtractionDataset:
         accuracy = self.accuracy.compute(predictions=pred_labels, references=labels)
         f1 = self.f1.compute(predictions=pred_labels, references=labels, average='macro')
         res = {'accuracy': accuracy['accuracy'], 'f1': f1['f1']}
+
+        if len(labels) == self.train_samples or len(labels) == self.eval_samples or len(labels) == self.test_samples:
+            cf = confusion_matrix(y_true=labels, y_pred=pred_labels)
+            logger.info('confusion matrix')
+            logger.info('\n' + '\n'.join([str(_) for _ in cf]))
+
         return res
 
     def get_loader(self, dataset, batch_size, shuffle=False):

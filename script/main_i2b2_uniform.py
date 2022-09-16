@@ -9,7 +9,7 @@ import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments

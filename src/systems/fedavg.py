@@ -53,11 +53,16 @@ class FedAvg(Base):
 
             # 3. train client models
             model_dicts = []
+            losses = []
             for i in select_clients:
                 model_state_dict, scalars = self.clients[i].train_model(self.ite)
+                losses.append(scalars['loss0'])
                 model_dicts.append(model_state_dict)
                 # print(i, int(torch.cuda.memory_allocated() / (1024 * 1024)))
                 # print(i, int(torch.cuda.max_memory_allocated() / (1024 * 1024)))
+            avg_loss = sum(losses) / len(losses)
+            logger.info(f'training loss: {avg_loss}')
+            wandb.log({'training loss': avg_loss}, step=self.ite)
 
             # update gradient and compute gradient cosine similarity
             # grad_dicts = self.get_grad_dicts(model_dicts)
@@ -71,19 +76,19 @@ class FedAvg(Base):
             # test and save models
             if self.ite % self.test_frequency == 0:
                 features = self.test_save_models(select_clients)
-                np.set_printoptions(precision=3)
-                n = len(features)
-                if n != 0:
-                    l = len(features[0])
-                    for ll in range(l):
-                        matrix = np.zeros((n, n))
-                        for i in range(n):
-                            for j in range(n):
-                                sim = cmp_CKA_sim(features[i][ll], features[j][ll])
-                                matrix[i][j] = sim
-                        avg = (matrix - np.eye(n, n)).sum() / (n * n - n)
-                        logger.info('\n' + '\n'.join([str(_) for _ in matrix]))
-                        logger.info(f'average CKA: {avg}')
+                # np.set_printoptions(precision=3)
+                # n = len(features)
+                # if n != 0:
+                #     l = len(features[0])
+                #     for ll in range(l):
+                #         matrix = np.zeros((n, n))
+                #         for i in range(n):
+                #             for j in range(n):
+                #                 sim = cmp_CKA_sim(features[i][ll], features[j][ll])
+                #                 matrix[i][j] = sim
+                #         avg = (matrix - np.eye(n, n)).sum() / (n * n - n)
+                #         logger.info('\n' + '\n'.join([str(_) for _ in matrix]))
+                #         logger.info(f'average CKA: {avg}')
 
     def get_grad_dicts(self, model_dicts):
         grad_dicts = [{} for _ in range(self.num_clients)]

@@ -7,7 +7,7 @@ from typing import Optional
 from transformers import HfArgumentParser, TrainingArguments
 from .datasets.glue import task_to_keys as glue_task_to_keys
 from .datasets.superglue import task_to_keys as superglue_task_to_keys
-from .systems import Base, FedAvg, FedProx, MOON, HarmoFL
+from .systems import Base, FedAvg, FedProx, MOON, HarmoFL, FedProto
 import os
 
 base_dir = os.path.expanduser('~/src')
@@ -16,6 +16,7 @@ SYSTEMS = {
     "centralized": Base,
     "FedAvg": FedAvg,
     "FedProx": FedProx,
+    "FedProto": FedProto,
     "MOON": MOON,
     "HarmoFL": HarmoFL
 }

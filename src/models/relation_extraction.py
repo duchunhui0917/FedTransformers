@@ -1,6 +1,8 @@
 import copy
 
 import os
+
+import math
 import torch
 import torch.nn
 from torch import nn
@@ -15,6 +17,7 @@ from .sequence_classification import (
     RobertaPromptForSequenceClassification
 )
 import torch.nn.functional as F
+from src.modules.utils import sim, mce_loss, mcl_loss, dce_loss
 
 logger = logging.getLogger(__name__)
 base_dir = os.path.expanduser('~/FedTransformers')
@@ -37,6 +40,18 @@ class RelationExtractionModel(nn.Module):
         self.criterion = nn.CrossEntropyLoss()
 
         self.model_name = model_name
+
+        w = torch.empty((num_labels, 768 * 2))
+        b = torch.empty(num_labels)
+
+        nn.init.kaiming_uniform_(w, a=math.sqrt(5))
+        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(w)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        nn.init.uniform_(b, -bound, bound)
+
+        self.proto = nn.Parameter(w, requires_grad=True)
+        self.bias = nn.Parameter(b, requires_grad=True)
+
         if model_name == 'LSTM':
             self.encoder = LSTM()
             self.classifier = nn.Sequential(
@@ -93,13 +108,7 @@ class RelationExtractionModel(nn.Module):
         freeze_param = total_param - training_param
         logger.info(f'total params: {total_param}, training params: {training_param}, freeze params: {freeze_param}')
 
-    @staticmethod
-    def sim(x, y):
-        norm_x = F.normalize(x, dim=-1)
-        norm_y = F.normalize(y, dim=-1)
-        return torch.matmul(norm_x, norm_y.transpose(1, 0))
-
-    def forward(self, data, ite=None):
+    def forward(self, data, args=None):
         if self.model_name == 'LSTM':
             embeddings = data['embeddings']
             label = data['label']
@@ -165,7 +174,11 @@ class RelationExtractionModel(nn.Module):
 
             # classifier
             logits = self.classifier(ent)  # (B, C)
+            # logits = F.linear(ent, self.proto, self.bias)
             loss = self.criterion(logits, labels)
+
+            dce = dce_loss(ent, labels, self.proto)
+            # proto_loss = mce_loss(ent, labels, self.proto)
 
             if self.training:
                 if self.augment == 'gradient_aug':
@@ -178,18 +191,26 @@ class RelationExtractionModel(nn.Module):
                     ce_loss = loss
                     loss = ce_loss + contrastive_loss
                     return [labels], [ent], [logits], [loss, ce_loss, contrastive_loss, pos_sim.mean(), neg_sim.mean()]
+                # elif self.augment == 'prototype_aug':
+                #     # instance-prototype loss
+                #     sim_ins_proto = self.sim(ent, proto_ent)
+                #     num = sim_ins_proto.shape[0]
+                #     loss_ins_proto = 0.
+                #     for i in range(num):
+                #         pos_score = 1 - sim_ins_proto[i][labels[i]]
+                #         loss_ins_proto += pos_score
+                #     loss_ins_proto /= num
+                #
+                #     ce_loss = loss
+                #     loss = ce_loss + 0.1 * proto_loss + loss_ins_proto
+                #     return [labels], [ent], [logits], [loss, ce_loss, proto_loss, loss_ins_proto]
                 elif self.augment == 'prototype_aug':
-                    # instance-prototype loss
-                    sim_ins_proto = self.sim(ent, proto_ent)
-                    num = sim_ins_proto.shape[0]
-                    loss_ins_proto = 0.
-                    for i in range(num):
-                        pos_score = 1 - sim_ins_proto[i][labels[i]]
-                        loss_ins_proto += pos_score
-                    loss_ins_proto /= num
-
+                    logits =
+                    if args and 'proto_ent' in args:
+                        proto_ent = args['proto_ent']
+                    proto_dce = dce_loss(proto_ent, proto_labels, self.proto)
                     ce_loss = loss
-                    loss = ce_loss + 0.1 * proto_loss + loss_ins_proto
-                    return [labels], [ent], [logits], [loss, ce_loss, proto_loss, loss_ins_proto]
+                    loss = ce_loss + proto_dce
+                    return [labels], [ent, proto_ent], [logits], [loss, ce_loss, proto_dce]
 
             return [labels], [ent], [logits], [loss]

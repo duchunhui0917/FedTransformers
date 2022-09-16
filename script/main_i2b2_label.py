@@ -43,6 +43,7 @@ config = [
     '--algorithm=FedAvg',
     '--split_type=label_split',
     '--num_clients=10',
+    # '--num_epochs=3',
     '--dirichlet_alpha=0.05',
     '--train_batch_size=8',
     '--eval_batch_size=8',
@@ -54,6 +55,7 @@ config = [
     '--do_train=True',
     '--do_test=True',
     '--augment=prototype_aug',
+    # '--tgwp=True',
     f'--enable_wandb=True',
     f'--project_name=FedTransformers_i2b2'
 ]

@@ -61,10 +61,7 @@ class HarmoFLClient(BaseClient):
                 tmp_data = copy.deepcopy(data)
                 for key, val in data.items():
                     tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
+                labels, features, logits, losses = model(tmp_data)
                 # compute the gradient
                 losses[0].mean().backward()
                 # normalize the gradient and add it to the parameters
@@ -73,10 +70,7 @@ class HarmoFLClient(BaseClient):
                 tmp_data = copy.deepcopy(data)
                 for key, val in data.items():
                     tmp_data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(tmp_data, ite)
-                else:
-                    labels, features, logits, losses = model(tmp_data)
+                labels, features, logits, losses = model(tmp_data)
                 # compute the gradient of the parameters with perturbation
                 losses[0].mean().backward()
                 # gradient descent

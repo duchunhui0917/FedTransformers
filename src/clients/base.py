@@ -77,10 +77,7 @@ class BaseClient(object):
                 d = OrderedDict(id=self.client_id)
                 for key, val in data.items():
                     data[key] = val.cuda()
-                if ite is not None:
-                    labels, features, logits, losses = model(data, ite)
-                else:
-                    labels, features, logits, losses = model(data)
+                labels, features, logits, losses = model(data)
                 losses[0].backward()
 
                 self.optimizer.step()

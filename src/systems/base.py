@@ -58,8 +58,7 @@ class Base(object):
 
             # train
             model_state_dict, scalars = self.central_client.train_model()
-            for key, val in scalars.items():
-                writer.add_scalar(key, val, self.ite)
+            wandb.log({'training loss': scalars['loss0']}, step=self.ite)
 
             self.model.load_state_dict(model_state_dict)
 

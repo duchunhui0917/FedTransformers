@@ -4,13 +4,20 @@ import datetime
 import warnings
 import logging
 import json
+
+import wandb
 from transformers import HfArgumentParser
 
 sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-# os.environ["HF_DATASETS_OFFLINE"] = "1"
-# os.environ["TRANSFORMERS_OFFLINE"] = "1"
-from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+from src.arguments import (
+    DataArguments,
+    ModelArguments,
+    FederatedLearningArguments,
+    WandbArguments,
+    SYSTEMS)
 from src.processor import process_dataset_model
 from src import plot_class_samples, status_mtx, init_log, set_seed
 from src.utils.plot_utils import plot_hist
@@ -19,46 +26,55 @@ base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = 'amazon_polarity'
-dataset_name = 'amazon_polarity'
-# dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
-model_type = 'bert'
-model_name = 'bert-base-uncased'
-tunning_method = 'bottleneck_adapter'
-prompt_method = None
-seed = 223
+task_name = 'i2b2'
+dataset_path = os.path.join(base_dir, f"data/i2b2_data.h5")
+model_type = 'distilbert'
+model_name = 'distilbert-base-uncased'
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/sst2_s{seed}/{model_name}_tgwg")
+                          f"ckpt/centralized/i2b2_s223/{model_name}_tgwg")
 
 config = [
     f'--task_name={task_name}',
-    f'--dataset_nam={dataset_name}',
-    # f'--dataset_path={dataset_path}',
-    f'--model_type={model_type}',
+    f'--dataset_path={dataset_path}',
     f'--model_name={model_name}',
-    # f'--tunning_method={tunning_method}',
-    # f'--prompt_method={prompt_method}',
-    f'--model_path={model_path}',
+    f'--model_type={model_type}',
+    # f'--model_path={model_path}',
     '--lr=5e-5',
-    '--algorithm=centralized',
-    '--split_type=centralized',
+    '--algorithm=FedProto',
+    '--split_type=label_split',
+    '--num_clients=10',
+    # '--num_epochs=3',
+    '--dirichlet_alpha=0.05',
     '--train_batch_size=8',
     '--eval_batch_size=8',
-    # '--max_train_samples=100',
-    # '--max_eval_samples=100',
-    # '--max_test_samples=100',
-    f'--seed={seed}',
+    # '--max_train_samples=800',
+    # '--max_eval_samples=800',
+    # '--max_test_samples=800',
+    '--seed=223',
     '--num_iterations=100',
-    '--do_train=False',
+    '--do_train=True',
     '--do_test=True',
-    # '--augment=True',
+    '--augment=prototype_aug',
+    # '--tgwp=True',
+    f'--enable_wandb=True',
+    f'--project_name=FedTransformers_i2b2'
 ]
 
-parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments))
-data_args, model_args, fl_args = parser.parse_args_into_dataclasses(config)
+parser = HfArgumentParser((DataArguments, ModelArguments, FederatedLearningArguments, WandbArguments))
+all_args = parser.parse_args(config)
+data_args, model_args, fl_args, wandb_args = parser.parse_args_into_dataclasses(config)
+if wandb_args.enable_wandb:
+    wandb.init(
+        config=all_args,
+        project=wandb_args.project_name,
+        entity=wandb_args.team_name,
+    )
+
 set_seed(fl_args.seed)
 
 model_name = model_name.replace('/', '_')
+if model_args.augment:
+    model_name += f'_{model_args.augment}'
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
 
@@ -71,23 +87,7 @@ elif fl_args.split_type == 'doc_split':
 else:
     ckpt = f'{model_name}'
 
-if fl_args.algorithm == 'centralized':
-    from src.systems.base import Base as system
-
-elif fl_args.algorithm == 'FedAvg':
-    from src.systems.fedavg import FedAvg as system
-
-elif fl_args.algorithm == 'FedProx':
-    from src.systems.fedprox import FedProx as system
-
-    fl_args.mu = 1
-elif fl_args.algorithm == 'MOON':
-    from src.systems.moon import MOON as system
-
-    fl_args.mu = 0
-    fl_args.temperature = 0.05
-else:
-    raise NotImplementedError
+system = SYSTEMS[fl_args.algorithm]
 
 task_name += f'_s{fl_args.seed}'
 
@@ -157,3 +157,4 @@ if fl_args.do_train:
 
 if fl_args.do_test:
     s.eval_model(data_loader=s.central_client.test_loader)
+    s.get_re_model_gradient_norm()

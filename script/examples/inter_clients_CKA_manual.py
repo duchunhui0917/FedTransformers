@@ -4,10 +4,13 @@ import datetime
 import warnings
 import logging
 import json
-from transformers import HfArgumentParser
 
-sys.path.append('..')
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import numpy as np
+from transformers import HfArgumentParser
+from src.utils.status_utils import cmp_CKA_sim
+
+sys.path.append('../..')
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from src.arguments import DataArguments, ModelArguments, FederatedLearningArguments
@@ -19,29 +22,35 @@ base_dir = os.path.expanduser('~/FedTransformers')
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(os.path.basename(__file__))
 
-task_name = 'xglue'
-dataset_name = 'paws-x'
-model_name = 'bert-base-multilingual-cased'
-tunning_name = 'P-Tunning_v2'
+task_name = '20news'
+dataset_path = os.path.join(base_dir, f"data/20news_data.h5")
+model_type = 'bert'
+model_name = 'bert-base-uncased'
+tunning_method = 'frozen'
+prompt_method = 'manual'
+seed = 222
+
 model_path = os.path.join(base_dir,
-                          f"ckpt/centralized/xglue_{dataset_name}/{model_name}_5_tgwg")
-psl = 128
+                          f"ckpt/FedAvg/20news_s223_100_100_100/{model_name}_{prompt_method}_0.01_10_5")
 config = [
     f'--task_name={task_name}',
-    f'--dataset_name={dataset_name}',
+    f'--dataset_path={dataset_path}',
+    f'--model_type={model_type}',
     f'--model_name={model_name}',
-    f'--tunning_name={tunning_name}',
+    # f'--tunning_method={tunning_method}',
+    f'--prompt_method={prompt_method}',
     # f'--model_path={model_path}',
-    '--lr=5e-3',
-    # f'--pre_seq_len={psl}',
-    '--algorithm=FedAvg',
-    '--split_type=doc_split',
+    '--lr=5e-5',
+    '--algorithm=centralized',
+    '--split_type=centralized',
     '--train_batch_size=8',
     '--eval_batch_size=8',
-    '--seed=223',
+    '--max_train_samples=100',
+    '--max_eval_samples=100',
+    '--max_test_samples=100',
+    f'--seed={seed}',
     '--num_iterations=100',
-    '--num_epochs=5',
-    '--do_train=True',
+    '--do_train=False',
     '--do_test=True'
 ]
 
@@ -52,6 +61,8 @@ set_seed(fl_args.seed)
 model_name = model_name.replace('/', '_')
 if model_args.tunning_method:
     model_name += f'_{model_args.tunning_method}'
+if model_args.prompt_method:
+    model_name += f'_{model_args.prompt_method}'
 
 if fl_args.split_type == 'label_split':
     ckpt = f'{model_name}_{fl_args.dirichlet_alpha}_{fl_args.num_clients}_{fl_args.num_epochs}'
@@ -80,23 +91,21 @@ elif fl_args.algorithm == 'MOON':
 else:
     raise NotImplementedError
 
-name = f'{task_name}_{dataset_name}'
-if data_args.max_train_samples or data_args.max_train_samples or data_args.max_train_samples:
-    name += f'_s{fl_args.seed}'
+task_name += f'_s{fl_args.seed}'
 
 if data_args.max_train_samples:
-    name += f'_{data_args.max_train_samples}'
+    task_name += f'_{data_args.max_train_samples}'
 if data_args.max_eval_samples:
-    name += f'_{data_args.max_eval_samples}'
+    task_name += f'_{data_args.max_eval_samples}'
 if data_args.max_test_samples:
-    name += f'_{data_args.max_test_samples}'
+    task_name += f'_{data_args.max_test_samples}'
 
-ckpt_dir = f'ckpt/{fl_args.algorithm}/{name}'
+ckpt_dir = f'ckpt/{fl_args.algorithm}/{task_name}'
 if not os.path.exists(os.path.join(base_dir, ckpt_dir)):
     os.makedirs(os.path.join(base_dir, ckpt_dir), exist_ok=True)
 fl_args.ckpt = os.path.join(base_dir, ckpt_dir, ckpt)
 
-log_dir = f'log/{fl_args.algorithm}/{name}'
+log_dir = f'log/{fl_args.algorithm}/{task_name}'
 if not os.path.exists(os.path.join(base_dir, log_dir)):
     os.makedirs(os.path.join(base_dir, log_dir), exist_ok=True)
 log_file = os.path.join(base_dir, log_dir, f'{ckpt}_{datetime.datetime.now():%y-%m-%d %H:%M}.log')
@@ -140,13 +149,18 @@ if num_labels != 1:
     logger.info(f'train test class samples\n{mtx}')
 
 s = system(dataset, model, fl_args)
+features = []
+n = 2
+for i in range(n):
+    p = model_path + f'_client{i}_tgwp'
+    logger.info(p)
+    s.load(p)
+    _, feature = s.eval_model(data_loader=s.central_client.test_loader)
+    features.append(feature)
 
-if model_args.model_path:
-    logger.info(model_args.model_path)
-    s.load(model_args.model_path)
-
-if fl_args.do_train:
-    s.run()
-
-if fl_args.do_test:
-    s.eval_model(data_loader=s.central_client.test_loader)
+matrix = np.zeros((n, n))
+for i in range(n):
+    for j in range(n):
+        sim = cmp_CKA_sim(features[i], features[j])
+        matrix[i][j] = sim[0]
+print(matrix)
